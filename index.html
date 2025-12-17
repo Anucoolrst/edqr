@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>File Encoder / Decoder</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header>
+    <h1>File Encoder / Decoder</h1>
+    <p>Convert any file to text and back. All processing is client-side.</p>
+    <button id="theme-toggle" type="button" aria-label="Switch to light mode" title="Toggle theme" aria-pressed="false">
+      <!-- Sun icon (shown in light mode target) -->
+      <svg class="icon sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.8 1.42-1.42zm10.48 0l1.79-1.79 1.41 1.41-1.79 1.8-1.41-1.42zM12 4V1h-0v3h0zm0 19v-3h0v3h0zM4 12H1v0h3v0zm19 0h-3v0h3v0zM6.76 19.16l-1.42 1.42-1.79-1.8 1.41-1.41 1.8 1.79zM19.16 17.24l1.41 1.41-1.79 1.8-1.41-1.42 1.79-1.79zM12 8a4 4 0 100 8 4 4 0 000-8z"/>
+      </svg>
+      <!-- Moon icon (shown in dark mode) -->
+      <svg class="icon moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+      </svg>
+    </button>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Encode a file</h2>
+      <div class="row">
+        <label class="file-input">
+          <input type="file" id="enc-file" />
+        </label>
+      </div>
+      <div class="row">
+        <label>
+          Encoding
+          <select id="enc-encoding">
+            <option value="auto" selected>Auto (shortest)</option>
+            <option value="base64">Base64</option>
+            <option value="base64url">Base64 URL (no padding)</option>
+            <option value="base91">Base91</option>
+            <option value="base85">Base85 (Ascii85)</option>
+            <option value="hex">Hex</option>
+          </select>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="enc-package" checked /> Package as JSON (adds filename, size, SHA-256)
+        </label>
+      </div>
+      <div class="row">
+        <label>
+          Compression
+          <select id="enc-compress-method">
+            <option value="auto" selected>Auto (best size)</option>
+            <option value="gzip">Gzip</option>
+            <option value="lzma">LZMA (strong)</option>
+            <option value="none">None</option>
+          </select>
+        </label>
+        <label>
+          Level
+          <select id="enc-compress-level">
+            <option value="1">Fast</option>
+            <option value="6" selected>Normal</option>
+            <option value="9">Max</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="checkbox">
+          <input type="checkbox" id="enc-encrypt" /> Encrypt with password (AES-GCM)
+        </label>
+        <label id="enc-pass-wrap" class="hidden">
+          Password
+          <input type="password" id="enc-password" placeholder="Enter password" />
+        </label>
+      </div>
+      <div class="row actions">
+        <button id="enc-run">Encode</button>
+        <button id="enc-copy" disabled>Copy output</button>
+        <button id="enc-download" disabled>Download output</button>
+        <button id="enc-get-text" disabled>Get Kool Code</button>
+        <button id="enc-clear">Clear</button>
+      </div>
+      <div class="meta">
+        <div>Original file: <span id="enc-file-name">—</span></div>
+        <div>Size: <span id="enc-file-size">—</span></div>
+        <div>SHA-256: <span id="enc-hash">—</span></div>
+        <div>Method: <span id="enc-method">—</span></div>
+        <div>Output length: <span id="enc-out-len">—</span></div>
+        <div id="enc-warning" class="warning"></div>
+      </div>
+      <textarea id="enc-output" placeholder="Encoded output appears here" spellcheck="false"></textarea>
+      <!-- New: result area to show Kool Code (domain hidden) -->
+      <div id="enc-result" class="hidden" style="margin-top:8px;">
+        <label for="enc-result-link" style="display:block;margin-bottom:4px;">Kool Code</label>
+        <input id="enc-result-link" type="text" readonly style="width:100%;" />
+        <div style="text-align:right;margin-top:6px;">
+          <button id="enc-copy-link" type="button">Copy code</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Decode from text</h2>
+      <div class="row">
+        <label>
+          Paste text or drop a .json/.b64/.b91/.hex here
+          <textarea id="dec-input" placeholder="Paste JSON package or raw Base64/Base91/Base85/Hex here" spellcheck="false"></textarea>
+        </label>
+      </div>
+      <!-- New: paste Kool Code or link and fetch into the textarea -->
+      <div class="row">
+        <label style="flex:1;">
+          Paste compressed Kool Code 
+          <input id="dec-link" type="text" placeholder="Enter the AnuKool Code" />
+        </label>
+        <button id="dec-fetch" type="button">Fetch</button>
+      </div>
+      <div class="row">
+        <label class="file-input">
+          <input type="file" id="dec-text-file" accept=".json,.b64,.b91,.hex,.txt" />
+        </label>
+      </div>
+      <div class="row">
+        <label>
+          If raw text, select encoding
+          <select id="dec-encoding">
+            <option value="auto" selected>Auto (JSON, Base64/Base91/Base85)</option>
+            <option value="base64">Base64</option>
+            <option value="base91">Base91</option>
+            <option value="base85">Base85 (Ascii85)</option>
+            <option value="hex">Hex</option>
+          </select>
+        </label>
+        <label id="dec-pass-wrap" class="hidden">
+          Password
+          <input type="password" id="dec-password" placeholder="Password if encrypted" />
+        </label>
+      </div>
+      <div class="row actions">
+        <button id="dec-run">Decode</button>
+        <button id="dec-clear">Clear</button>
+      </div>
+      <div class="meta">
+        <div>Detected: <span id="dec-detected">—</span></div>
+        <div>Filename: <span id="dec-name">—</span></div>
+        <div>Expected SHA-256: <span id="dec-expected">—</span></div>
+        <div>Actual SHA-256: <span id="dec-actual">—</span></div>
+        <div>Input length: <span id="dec-in-len">—</span></div>
+        <div id="dec-status"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <small>Tip: For very large files, consider the desktop/CLI approach. This web app loads the whole file in memory.</small>
+  </footer>
+
+  <!-- gzip fallback (fflate) for browsers without CompressionStream -->
+  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.min.js" crossorigin="anonymous"></script>
+  <!-- LZMA for stronger compression (worker is spawned via URL in app.js) -->
+  <script src="https://cdn.jsdelivr.net/gh/LZMA-JS/LZMA-JS/src/lzma-min.js" crossorigin="anonymous"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
+
+This paste expires in <1 hour. Public IP access. Share whatever you see with others in seconds with Context.Terms of ServiceReport this
