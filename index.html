@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-  <meta name="color-scheme" content="dark light" />
+  <meta name="color-scheme" conte  <!-- QR code scanning -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>rk light" />
   <meta name="theme-color" content="#0b1020" />
   <title>File Encoder / Decoder</title>
   <link rel="stylesheet" href="./styles.css" />
@@ -96,8 +97,9 @@
       <div id="enc-result" class="hidden" style="margin-top:8px;">
         <label for="enc-result-link" style="display:block;margin-bottom:4px;">Kool Code</label>
         <input id="enc-result-link" type="text" readonly style="width:100%;" />
-        <div style="text-align:right;margin-top:6px;">
+        <div style="text-align:right;margin-top:6px;display:flex;gap:8px;justify-content:flex-end;">
           <button id="enc-copy-link" type="button">Copy code</button>
+          <button id="enc-show-qr" type="button" disabled>Show QR</button>
         </div>
       </div>
     </section>
@@ -116,7 +118,10 @@
           Paste compressed Kool Code 
           <input id="dec-link" type="text" placeholder="Enter the AnuKool Code" />
         </label>
-        <button id="dec-fetch" type="button">Fetch</button>
+        <div style="display:flex;gap:8px;">
+          <button id="dec-fetch" type="button">Fetch</button>
+          <button id="dec-scan-qr" type="button">Scan QR</button>
+        </div>
       </div>
       <div class="row">
         <label class="file-input">
@@ -154,6 +159,31 @@
     </section>
   </main>
 
+  <!-- QR Modal for displaying Kool Code QR -->
+  <div id="enc-qr-modal" class="qr-modal hidden">
+    <div class="qr-modal-content">
+      <div class="qr-modal-header">
+        <h3>Kool Code QR</h3>
+        <button id="enc-qr-close" class="qr-close">&times;</button>
+      </div>
+      <div id="enc-qr-code" class="qr-display"></div>
+      <p class="qr-hint">Scan this QR code to quickly enter the Kool Code</p>
+    </div>
+  </div>
+
+  <!-- QR Scan Overlay -->
+  <div id="qr-scan-overlay" class="qr-modal hidden">
+    <div class="qr-modal-content">
+      <div class="qr-modal-header">
+        <h3>Scan Kool Code QR</h3>
+        <button id="qr-scan-close" class="qr-close">&times;</button>
+      </div>
+      <video id="qr-video" class="qr-video" playsinline></video>
+      <canvas id="qr-canvas" class="hidden"></canvas>
+      <p id="qr-scan-status" class="qr-hint">Initializing camera...</p>
+    </div>
+  </div>
+
   <footer>
     <small>Tip: For very large files, consider the desktop/CLI approach. This web app loads the whole file in memory.</small>
   </footer>
@@ -162,8 +192,12 @@
   <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.min.js" crossorigin="anonymous"></script>
   <!-- LZMA for stronger compression (worker is spawned via URL in app.js) -->
   <script src="https://cdn.jsdelivr.net/gh/LZMA-JS/LZMA-JS/src/lzma-min.js" crossorigin="anonymous"></script>
+  <!-- QR Code generation - trying different library -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" onerror="console.error('QRCode from jsdelivr failed to load')"></script>
+  <!-- Backup QR library -->
+  <script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js" onerror="console.error('qrcode-generator failed to load')"></script>
+  <!-- QR Code scanning -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" crossorigin="anonymous"></script>
   <script src="./app.js"></script>
 </body>
 </html>
-
-This paste expires in <1 hour. Public IP access. Share whatever you see with others in seconds with Context.Terms of ServiceReport this
