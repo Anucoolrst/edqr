@@ -115,6 +115,11 @@ const enc = {
   // New: compression controls
   compMethod: document.querySelector('#enc-compress-method'),
   compLevel: document.querySelector('#enc-compress-level'),
+  // QR UI
+  showQrBtn: document.querySelector('#enc-show-qr'),
+  qrModal: document.querySelector('#enc-qr-modal'),
+  qrClose: document.querySelector('#enc-qr-close'),
+  qrBox: document.querySelector('#enc-qr-code')
 };
 
 const dec = {
@@ -134,6 +139,13 @@ const dec = {
   // New: paste link input and fetch button
   link: document.querySelector('#dec-link'),
   fetch: document.querySelector('#dec-fetch'),
+  // QR scan
+  scanBtn: document.querySelector('#dec-scan-qr'),
+  scanOverlay: document.querySelector('#qr-scan-overlay'),
+  scanVideo: document.querySelector('#qr-video'),
+  scanCanvas: document.querySelector('#qr-canvas'),
+  scanStatus: document.querySelector('#qr-scan-status'),
+  scanClose: document.querySelector('#qr-scan-close'),
 };
 
 function humanSize(n){
@@ -394,7 +406,18 @@ function resetEncMeta(){ setText(enc.fileName,'—'); setText(enc.fileSize,'—'
 function resetDecMeta(){ setText(dec.detected,'—'); setText(dec.name,'—'); setText(dec.expected,'—'); setText(dec.actual,'—'); dec.status.textContent=''; }
 
 enc.encrypt.addEventListener('change', ()=>{ enc.passWrap.classList.toggle('hidden', !enc.encrypt.checked); });
-enc.clear.addEventListener('click', ()=>{ enc.out.value=''; enc.copy.disabled=true; enc.download.disabled=true; if(enc.getText) enc.getText.disabled=true; if(enc.resultBox){ enc.resultBox.classList.add('hidden'); enc.resultLink.value=''; } resetEncMeta(); });
+enc.clear.addEventListener('click', ()=>{ 
+  enc.out.value=''; 
+  enc.copy.disabled=true; 
+  enc.download.disabled=true; 
+  if(enc.getText) enc.getText.disabled=true; 
+  if(enc.showQrBtn) enc.showQrBtn.disabled=true;
+  if(enc.resultBox){ 
+    enc.resultBox.classList.add('hidden'); 
+    enc.resultLink.value=''; 
+  } 
+  resetEncMeta(); 
+});
 enc.out.addEventListener('input', ()=>{ if(enc.getText) enc.getText.disabled = enc.out.value.trim().length === 0; });
 
 dec.clear.addEventListener('click', ()=>{ dec.input.value=''; resetDecMeta(); updateInputLen(); });
@@ -534,12 +557,15 @@ if(enc.getText){
     enc.getText.textContent = 'Compressing...';
     enc.getText.disabled = true;
     if(enc.resultBox){ enc.resultBox.classList.add('hidden'); enc.resultLink.value=''; }
+    if(enc.showQrBtn) enc.showQrBtn.disabled=true;
     try{
       const toSend = ensureSharePackage(text);
       const url = await sendToCtxt(toSend);
       if(enc.resultBox && enc.resultLink){
         enc.resultLink.value = toKoolCode(url) || '';
         enc.resultBox.classList.remove('hidden');
+        // Enable Show QR button when Kool Code is available
+        if(enc.showQrBtn) enc.showQrBtn.disabled = !enc.resultLink.value;
         try{ enc.resultLink.focus(); enc.resultLink.select(); }catch{}
       }
       enc.getText.textContent = 'Get Kool Code';
@@ -892,3 +918,146 @@ if(dec.fetch){
     });
   }catch{}
 })();
+
+// QR Code generation (after Kool Code produced)
+function renderKoolQr(code){
+  if(!enc.qrBox) return;
+  enc.qrBox.innerHTML='';
+  
+  const payload = code.trim();
+  console.log('Generating QR for:', payload);
+  
+  // Use qrserver.com online QR service - Method 2 (the working one)
+  try {
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload)}`;
+    const img = document.createElement('img');
+    img.src = qrUrl;
+    img.style.width = '200px';
+    img.style.height = '200px';
+    img.style.border = '1px solid #ccc';
+    img.onerror = () => {
+      console.error('QR service unavailable');
+      enc.qrBox.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+          <p>QR service temporarily unavailable</p>
+          <p style="font-size: 12px; word-break: break-all;">${payload}</p>
+        </div>
+      `;
+    };
+    img.onload = () => {
+      console.log('QR code generated successfully using qrserver.com');
+    };
+    enc.qrBox.appendChild(img);
+  } catch (error) {
+    console.error('QR generation error:', error);
+    enc.qrBox.innerHTML = `
+      <div style="text-align: center; padding: 20px;">
+        <p>Failed to generate QR code</p>
+        <p style="font-size: 12px; word-break: break-all;">${payload}</p>
+      </div>
+    `;
+  }
+}
+
+function openQrModal(){ if(!enc.qrModal) return; enc.qrModal.classList.remove('hidden'); }
+function closeQrModal(){ if(!enc.qrModal) return; enc.qrModal.classList.add('hidden'); }
+if(enc.showQrBtn){
+  enc.showQrBtn.addEventListener('click', ()=>{
+    const code = enc.resultLink?.value || '';
+    if(!code){ alert('No Kool Code yet.'); return; }
+    renderKoolQr(code);
+    openQrModal();
+  });
+}
+if(enc.qrClose){ enc.qrClose.addEventListener('click', closeQrModal); }
+window.addEventListener('keydown', e=>{ if(e.key==='Escape') closeQrModal(); });
+enc.qrModal?.addEventListener('click', e=>{ if(e.target===enc.qrModal) closeQrModal(); });
+
+// QR Scanning
+let qrScanStream=null, qrScanActive=false;
+function ensureJsQr(){ return typeof jsQR === 'function'; }
+async function startQrScan(){
+  if(!dec.scanOverlay) return;
+  if(!ensureJsQr()){ alert('QR scan library missing.'); return; }
+  dec.scanStatus.textContent='📷 Starting camera...';
+  dec.scanOverlay.classList.remove('hidden');
+  try{
+    // Optimized camera settings for speed and QR detection
+    qrScanStream = await navigator.mediaDevices.getUserMedia({ 
+      video:{ 
+        facingMode: 'environment',
+        width: { ideal: 640, max: 1280 },  // Lower resolution for speed
+        height: { ideal: 480, max: 720 },
+        frameRate: { ideal: 30, max: 60 }  // High frame rate for responsive scanning
+      } 
+    });
+    dec.scanVideo.srcObject = qrScanStream; 
+    await dec.scanVideo.play();
+    qrScanActive = true; 
+    dec.scanStatus.textContent='📷 Point camera at QR code - Ultra-fast scanning active!';
+    // Start scanning immediately
+    scanLoop();
+  }catch(e){ 
+    dec.scanStatus.textContent='❌ Camera error: '+e.message; 
+    console.error('Camera error:', e);
+  }
+}
+function stopQrScan(){
+  qrScanActive=false;
+  if(qrScanStream){ qrScanStream.getTracks().forEach(t=>t.stop()); qrScanStream=null; }
+  dec.scanOverlay?.classList.add('hidden');
+}
+async function scanLoop(){
+  if(!qrScanActive) return;
+  try{
+    const video = dec.scanVideo;
+    if(video.readyState===video.HAVE_ENOUGH_DATA){
+      const canvas = dec.scanCanvas; const ctx = canvas.getContext('2d');
+      // Use much smaller canvas for maximum speed
+      const scale = 0.3; // Process at 30% resolution for ultra-fast speed
+      canvas.width = video.videoWidth * scale; 
+      canvas.height = video.videoHeight * scale;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      // Use fastest jsQR settings
+      const result = jsQR(imgData.data, canvas.width, canvas.height, { 
+        inversionAttempts: 'dontInvert' // Skip inversion for maximum speed
+      });
+      
+      if(result && result.data){
+        dec.scanStatus.textContent='✅ QR Code Found!';
+        // IMPORTANT: Fill the Kool Code field (next to fetch button) - NOT the decode input
+        if(dec.link){ 
+          dec.link.value = result.data.trim();
+          console.log('✅ QR scanned and pasted to Kool Code field:', result.data.trim());
+          // Auto-focus the field to show it was filled
+          dec.link.focus();
+          dec.link.select();
+        }
+        stopQrScan();
+        return; // Exit immediately, no delay
+      }else{
+        dec.scanStatus.textContent='📷 Scanning...';
+      }
+    }
+  }catch(e){ dec.scanStatus.textContent='❌ Scan error: '+e.message; }
+  // Ultra-fast scanning for instant detection
+  setTimeout(scanLoop, 10); // Scan every 10ms (100 times per second!)
+}
+if(dec.scanBtn){ dec.scanBtn.addEventListener('click', startQrScan); }
+if(dec.scanClose){ dec.scanClose.addEventListener('click', stopQrScan); }
+window.addEventListener('keydown', e=>{ if(e.key==='Escape') stopQrScan(); });
+dec.scanOverlay?.addEventListener('click', e=>{ if(e.target===dec.scanOverlay) stopQrScan(); });
+
+// When a Kool Code is generated, we can optionally auto-generate QR silently
+function maybeAutoQr(){
+  if(!enc.resultLink?.value) return;
+  if(enc.qrBox && !enc.qrModal?.classList.contains('hidden')) renderKoolQr(enc.resultLink.value);
+}
+// Hook into result copy generation end (after Get Kool Code sets value)
+// Using MutationObserver to detect value change
+if(enc.resultLink){
+  const obs = new MutationObserver(()=> maybeAutoQr());
+  obs.observe(enc.resultLink, { attributes:true, attributeFilter:['value'] });
+}
