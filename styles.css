@@ -53,10 +53,123 @@ textarea{
 }
 .meta{color:var(--muted);display:grid;gap:6px}
 .warning{color:var(--warn)}
-.hidden{display:none}
+.hidden{display:none !important}
 .file-input input{max-width:300px}
 #dec-input{min-height:220px}
 footer{padding:8px 20px 20px;color:var(--muted)}
+
+/* QR Code Modal Styles */
+.qr-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.qr-modal-content {
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  padding: 20px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  position: relative;
+}
+
+.qr-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.qr-modal-header h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+}
+
+.qr-close {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.2);
+  color: var(--text);
+  font-size: 20px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-close:hover {
+  border-color: var(--acc);
+  background: rgba(255,255,255,.1);
+}
+
+.qr-refresh {
+  background: var(--acc);
+  border: 1px solid var(--acc);
+  color: white;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+}
+
+.qr-refresh:hover {
+  background: transparent;
+  color: var(--acc);
+}
+
+.qr-display {
+  margin: 20px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  background: white;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.qr-video {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  border-radius: 8px;
+  background: #000;
+}
+
+.qr-hint {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 10px 0;
+}
+
+/* Light theme QR styles */
+body[data-theme="light"] .qr-modal-content {
+  background: var(--card);
+  border-color: rgba(0,0,0,.08);
+}
+
+body[data-theme="light"] .qr-close {
+  border-color: rgba(0,0,0,.2);
+}
+
+body[data-theme="light"] .qr-close:hover {
+  border-color: var(--acc);
+  background: rgba(0,0,0,.1);
+}
 
 /* Theme toggle button */
 #theme-toggle{
@@ -124,6 +237,16 @@ body[data-theme="light"] button{background:linear-gradient(180deg,#f7f9fc,#e9eef
 
   footer{padding:8px 12px calc(20px + env(safe-area-inset-bottom))}
   .row select#enc-compress-method, .row select#enc-compress-level{min-width:auto;width:100%}
+  
+  /* QR modal responsive */
+  .qr-modal-content {
+    max-width: 95%;
+    padding: 15px;
+  }
+  
+  .qr-video {
+    max-width: 280px;
+  }
 }
 
 .row select#enc-compress-method, .row select#enc-compress-level{min-width:140px}
