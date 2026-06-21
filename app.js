@@ -12,11 +12,7 @@ const CTXT_BASE = 'https://ctxt.io';
 
 // Add proxy list and proxy-aware fetch helper (direct first, then fallbacks)
 const CTXT_PROXIES = [
-  { base: 'https://corsproxy.io/?', methods: ['GET','POST'] },
-  { base: 'https://cors.isomorphic-git.org/', methods: ['GET','POST'] },
-  { base: 'https://thingproxy.freeboard.io/fetch/', methods: ['GET','POST'] },
   { base: 'https://api.allorigins.win/raw?url=', methods: ['GET'] },
-  { base: 'https://cors-anywhere.herokuapp.com/', methods: ['GET','POST'] },
 ];
 // LZMA worker URL for browser instance creation (for stronger compression)
 const LZMA_WORKER_URL = 'https://cdn.jsdelivr.net/gh/LZMA-JS/LZMA-JS/src/lzma_worker-min.js';
@@ -31,18 +27,44 @@ function makeProxyUrl(base, absUrl){
 async function fetchWithCors(url, options={}){
   const method = (options.method || 'GET').toUpperCase();
   let lastErr;
+  
+  // Add timeout for mobile networks
+  const timeoutMs = 15000; // 15 seconds for mobile
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  const fetchOptions = { ...options, signal: controller.signal };
+  
   try{
-    const res = await fetch(url, options);
+    const res = await fetch(url, fetchOptions);
+    clearTimeout(timeoutId);
     if(res.ok) return res;
     lastErr = new Error(`HTTP ${res.status}`);
-  }catch(e){ lastErr = e; }
+  }catch(e){ 
+    clearTimeout(timeoutId);
+    if(e.name === 'AbortError') {
+      lastErr = new Error('Request timeout - please check your connection');
+    } else {
+      lastErr = e;
+    }
+  }
+  
   for(const p of CTXT_PROXIES){
     if(p.methods && !p.methods.includes(method)) continue;
     try{
-      const res = await fetch(makeProxyUrl(p.base, url), options);
+      const controller2 = new AbortController();
+      const timeoutId2 = setTimeout(() => controller2.abort(), timeoutMs);
+      const res = await fetch(makeProxyUrl(p.base, url), { ...fetchOptions, signal: controller2.signal });
+      clearTimeout(timeoutId2);
       if(res.ok) return res;
       lastErr = new Error(`Proxy ${p.base} -> HTTP ${res.status}`);
-    }catch(e){ lastErr = e; }
+    }catch(e){ 
+      if(e.name === 'AbortError') {
+        lastErr = new Error('Request timeout - please check your connection');
+      } else {
+        lastErr = e;
+      }
+    }
   }
   throw lastErr || new Error('Fetch failed');
 }
@@ -136,9 +158,9 @@ const dec = {
   actual: $('#dec-actual'),
   status: $('#dec-status'),
   inLen: document.querySelector('#dec-in-len'),
-  // New: paste link input and fetch button
   link: document.querySelector('#dec-link'),
   fetch: document.querySelector('#dec-fetch'),
+  noobDownload: document.querySelector('#dec-noob-download'),
   // QR scan
   scanBtn: document.querySelector('#dec-scan-qr'),
   scanOverlay: document.querySelector('#qr-scan-overlay'),
@@ -412,6 +434,7 @@ enc.clear.addEventListener('click', ()=>{
   enc.download.disabled=true; 
   if(enc.getText) enc.getText.disabled=true; 
   if(enc.showQrBtn) enc.showQrBtn.disabled=true;
+  delete document.body.dataset.encoded; // hide Get Kool Code again in noob mode
   if(enc.resultBox){ 
     enc.resultBox.classList.add('hidden'); 
     enc.resultLink.value=''; 
@@ -430,8 +453,8 @@ enc.file.addEventListener('change', ()=>{
 
 enc.copy.addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText(enc.out.value); enc.copy.textContent='Copied'; setTimeout(()=> enc.copy.textContent='Copy output',1200);}catch{ alert('Copy failed'); } });
 enc.download.addEventListener('click', ()=>{
-  const txt=enc.out.value; const ext = enc.encoding.value==='hex' ? 'hex' : (enc.encoding.value==='base85'?'a85':(enc.encoding.value==='base91'?'b91':'b64'));
-  const name=(enc.file.files[0]?.name||'output') + (enc.pkg.checked?'.json':`.${ext}`);
+  const txt=enc.out.value; 
+  const name=(enc.file.files[0]?.name||'output') + '.json'; // Always use .json extension
   downloadBlob(new Blob([txt],{type:'text/plain'}), name);
 });
 
@@ -449,7 +472,8 @@ function looksLikeAscii85(s){ return /^[\x21-\x75z\s]+$/.test(s.trim()); }
 function looksLikeBase91(s){ return /^[A-Za-z0-9!#$%&()*+,./:;<=>?@\[\]^_`{|}~\"\s]+$/.test(s.trim()); }
 
 async function sendToCtxt(text){
-  const payload = { ext: 'chrome', v: 2, ttl: '', content: text };
+  const wrapped = `--KOOLSTART--\n${text}\n--KOOLEND--`;
+  const payload = { ext: 'chrome', v: 2, ttl: '', content: wrapped };
   const prefix = CTXT_BASE;
 
   try{
@@ -614,13 +638,13 @@ enc.run.addEventListener('click', async ()=>{
     }
 
     let outputText = chosen.text;
-    if(enc.pkg.checked){
-      const pkg={ v:2, meta:{ name:file.name, size:file.size, sha256: origHash, ts: Date.now(), enc: chosen.label, encrypted: enc.encrypt.checked, gzip: false, comp: comp.used ? comp.name : 'none' }, data: outputText };
-      outputText = JSON.stringify(pkg);
-    }
+    // Always package as JSON to preserve file metadata
+    const pkg={ v:2, meta:{ name:file.name, size:file.size, sha256: origHash, ts: Date.now(), enc: chosen.label, encrypted: enc.encrypt.checked, gzip: false, comp: comp.used ? comp.name : 'none' }, data: outputText };
+    outputText = JSON.stringify(pkg);
 
     enc.out.value=outputText; enc.outLen.textContent=`${outputText.length.toLocaleString()} chars`; setText(enc.method, `${steps.join(' + ')}${steps.length? ' + ':''}${chosen.label}`);
     enc.copy.disabled=false; enc.download.disabled=false; if(enc.getText) enc.getText.disabled=false;
+    document.body.dataset.encoded = 'true'; // reveal Get Kool Code in noob mode
     if(outputText.length>2_000_000){ enc.warn.textContent='Warning: Output is large; some sites may truncate pasted text. Prefer download.'; }
   }catch(err){ console.error(err); enc.warn.textContent='Error: '+err.message; }
 });
@@ -818,13 +842,23 @@ async function fetchCtxtText(url){
     } catch (e) { lastErr = e; }
   }
 
-  throw lastErr || new Error('Failed to fetch CTXT content');
+  throw lastErr || new Error('Failed to fetch');
 }
 
 // Remove constant CTXT boilerplate and any leading spaces/blank lines from fetched text
 function sanitizeFetchedText(raw){
   if (raw == null) return '';
-  let out = String(raw);
+  const s = String(raw);
+
+  // If delimiters are present, extract only what's between them (immune to ctxt.io changes)
+  const start = s.indexOf('--KOOLSTART--');
+  const end = s.indexOf('--KOOLEND--');
+  if(start !== -1 && end !== -1 && end > start){
+    return s.slice(start + '--KOOLSTART--'.length, end).trim();
+  }
+
+  // Fallback: old sanitization for Kool Codes generated before this fix
+  let out = s;
 
   // Remove CDATA Google conversion snippet block (if present)
   out = out.replace(/\/\*\s*<!\[CDATA\[[\s\S]*?\]\]>\s*\*\//g, '');
@@ -845,16 +879,12 @@ function sanitizeFetchedText(raw){
     );
   };
 
-  // Filter out boilerplate lines anywhere in the text
   let filtered = lines.filter(line => !isBoilerplate(line));
 
-  // Remove leading blank lines
   while (filtered.length && filtered[0].trim() === '') filtered.shift();
-  // Remove trailing blank lines
   while (filtered.length && filtered[filtered.length - 1].trim() === '') filtered.pop();
 
   if (filtered.length) {
-    // Ensure no spaces at the start of the text (first line only)
     filtered[0] = filtered[0].replace(/^\s+/, '');
   }
 
@@ -869,20 +899,96 @@ if(dec.fetch){
       dec.status.style.color='var(--danger)';
       return;
     }
+    
+    // Disable fetch button during request to prevent multiple requests
+    dec.fetch.disabled = true;
+    dec.fetch.textContent = 'Fetching...';
     dec.status.textContent = 'Fetching…';
     dec.status.style.color='';
+    const startTime = performance.now();
+    
     try{
       // Important: pass the original input so we also try the page URL, like webapp.js
       const text = await fetchCtxtText(rawInput);
       const cleaned = sanitizeFetchedText(text);
       dec.input.value = cleaned; // apply sanitization and preserve remaining content
       updateInputLen();
-      dec.status.textContent = 'Loaded content from code.';
+      const endTime = performance.now();
+      const fetchTime = ((endTime - startTime) / 1000).toFixed(2);
+      dec.status.textContent = `Loaded content from code in ${fetchTime}s`;
       dec.status.style.color = 'var(--accent-2)';
     }catch(e){
       console.error(e);
-      dec.status.textContent = 'Fetch failed: ' + (e.message || e);
+      const endTime = performance.now();
+      const fetchTime = ((endTime - startTime) / 1000).toFixed(2);
+      // Simple, clean error message
+      dec.status.textContent = `Fetching failed after ${fetchTime}s`;
       dec.status.style.color = 'var(--danger)';
+    } finally {
+      // Re-enable fetch button
+      dec.fetch.disabled = false;
+      dec.fetch.textContent = 'Fetch';
+    }
+  });
+}
+
+// NOOB MODE: Download button — fetch + decode + download in one click
+if(dec.noobDownload){
+  dec.noobDownload.addEventListener('click', async ()=>{
+    const rawInput = (dec.link?.value || '').trim();
+    if(!isValidCtxtInput(rawInput)){
+      dec.status.textContent = 'Enter a valid Kool Code.';
+      dec.status.style.color = 'var(--danger)';
+      return;
+    }
+    dec.noobDownload.disabled = true;
+    dec.noobDownload.textContent = 'Downloading...';
+    dec.status.textContent = 'Fetching…';
+    dec.status.style.color = '';
+    try{
+      const text = await fetchCtxtText(rawInput);
+      const cleaned = sanitizeFetchedText(text);
+
+      // Inline decode logic
+      let meta = null, dataStr = null;
+      const pkg = tryParseJson(cleaned);
+      if(pkg && pkg.data){ meta = pkg.meta || {}; dataStr = pkg.data; }
+      else { dataStr = cleaned; }
+
+      const encLabel = meta?.enc || 'base64url';
+      let buf;
+      if(encLabel.includes('91')) buf = base91ToBuf(dataStr);
+      else if(encLabel.includes('85')) buf = ascii85ToBuf(dataStr);
+      else if(encLabel.includes('64url')) buf = base64UrlToBuf(dataStr);
+      else if(encLabel.includes('64')) buf = base64ToBuf(dataStr);
+      else if(encLabel.includes('hex')) buf = hexToBuf(dataStr);
+      else buf = base64UrlToBuf(dataStr);
+
+      if(meta?.encrypted){
+        const pwd = dec.password?.value || '';
+        if(!pwd) throw new Error('Password required for encrypted data');
+        buf = await aesGcmDecrypt(buf, pwd);
+      }
+      if(meta?.comp === 'gzip' || meta?.gzip){
+        if('DecompressionStream' in window){
+          buf = await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+        } else if(window.fflate?.gunzipSync){
+          buf = window.fflate.gunzipSync(new Uint8Array(buf)).buffer;
+        }
+      } else if(meta?.comp === 'lzma'){
+        buf = await lzmaDecompress(buf);
+      }
+
+      downloadBlob(new Blob([buf]), suggestDownloadName(meta, buf));
+      dec.status.textContent = 'Downloaded!';
+      dec.status.style.color = 'var(--accent-2)';
+    }catch(e){
+      console.error(e);
+      dec.status.textContent = 'Failed: ' + e.message;
+      dec.status.style.color = 'var(--danger)';
+    } finally {
+      dec.noobDownload.disabled = false;
+      dec.noobDownload.textContent = 'Download';
     }
   });
 }
@@ -915,6 +1021,65 @@ if(dec.fetch){
       const next = (document.body.dataset.theme === 'light') ? 'dark' : 'light';
       localStorage.setItem(themeKey, next);
       apply(next);
+    });
+  }catch{}
+})();
+
+// USER MODE TOGGLE (noob/beginner/pro) with persistence
+(function setupUserModeToggle(){
+  try{
+    const modeKey = 'vr-user-mode';
+    const buttons = {
+      noob: document.getElementById('mode-noob'),
+      beginner: document.getElementById('mode-beginner'),
+      pro: document.getElementById('mode-pro'),
+    };
+
+    const apply = (mode)=>{
+      document.body.dataset.userMode = mode;
+
+      // Update active button
+      Object.keys(buttons).forEach(k => {
+        if(buttons[k]) buttons[k].classList.toggle('active', k === mode);
+      });
+
+      // noob-hidden elements: hidden only in noob mode
+      document.querySelectorAll('.noob-hidden').forEach(el => {
+        el.style.display = mode === 'noob' ? 'none' : '';
+      });
+
+      // advanced-option elements: hidden in noob and beginner modes
+      document.querySelectorAll('.advanced-option').forEach(el => {
+        el.style.display = mode === 'pro' ? '' : 'none';
+      });
+
+      // encrypt row: hidden in noob and beginner modes
+      const encryptRow = document.querySelector('.encrypt-row');
+      if(encryptRow) encryptRow.style.display = mode === 'pro' ? '' : 'none';
+
+      // Set encoding defaults per mode
+      if(mode === 'noob'){
+        if(enc.encoding) enc.encoding.value = 'base64url';
+        if(enc.compMethod) enc.compMethod.value = 'gzip';
+        if(enc.compLevel) enc.compLevel.value = '6';
+        if(enc.encrypt) enc.encrypt.checked = false;
+        if(dec.encoding) dec.encoding.value = 'auto';
+      } else if(mode === 'beginner'){
+        if(enc.encoding) enc.encoding.value = 'base64url';
+        if(enc.compMethod) enc.compMethod.value = 'gzip';
+        if(enc.compLevel) enc.compLevel.value = '6';
+        if(enc.encrypt) enc.encrypt.checked = false;
+      }
+    };
+
+    let saved = localStorage.getItem(modeKey) || 'beginner';
+    apply(saved);
+
+    Object.keys(buttons).forEach(mode => {
+      if(buttons[mode]) buttons[mode].addEventListener('click', ()=>{
+        localStorage.setItem(modeKey, mode);
+        apply(mode);
+      });
     });
   }catch{}
 })();
