@@ -185,6 +185,44 @@ body[data-theme="light"] .qr-close:hover {
 #theme-toggle .sun{display:none}
 #theme-toggle .moon{display:block}
 
+/* Noob mode visibility rules */
+body[data-user-mode="noob"] .noob-hidden { display: none !important; }
+body:not([data-user-mode="noob"]) .noob-only { display: none !important; }
+body[data-user-mode="noob"] .noob-after-encode { display: none; }
+body[data-user-mode="noob"][data-encoded] .noob-after-encode { display: inline-flex; }
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 20px;
+  padding: 3px;
+}
+
+.mode-btn {
+  padding: 4px 12px;
+  border-radius: 16px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: unset;
+}
+
+.mode-btn:hover { color: var(--text); background: rgba(255,255,255,.08); }
+.mode-btn.active { background: var(--acc); color: #fff; box-shadow: 0 2px 6px rgba(91,156,255,.3); }
+.mode-btn.active:hover { background: var(--acc); }
+
+body[data-theme="light"] .mode-toggle { background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.12); }
+body[data-theme="light"] .mode-btn { color: var(--muted); }
+body[data-theme="light"] .mode-btn:hover { background: rgba(0,0,0,.06); color: var(--text); }
+body[data-theme="light"] .mode-btn.active { background: var(--acc); color: #fff; }
+
 /* In light mode, show sun (meaning you can switch to dark) */
 body[data-theme="light"] #theme-toggle{border-color:rgba(0,0,0,.15)}
 body[data-theme="light"] #theme-toggle:hover{background:rgba(0,0,0,.05)}
@@ -211,9 +249,21 @@ body[data-theme="light"] button{background:linear-gradient(180deg,#f7f9fc,#e9eef
 
 /* Responsive enhancements for mobile */
 @media (max-width: 640px) {
-  header{padding:16px 12px 6px}
+  header{padding:16px 12px 6px; position: relative;}
+  
+  /* Make header layout mobile-friendly */
+  header div {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    gap: 8px !important;
+  }
+  
+  /* Mobile mode buttons */
+  .mode-btn { padding: 4px 8px; font-size: 12px; }
+
   #theme-toggle{right:10px; top:10px; width:34px; height:34px}
-  header h1{font-size:22px}
+  header h1{font-size:22px; padding-right: 120px;}
   header p{font-size:14px}
 
   main{padding:8px 12px 20px;grid-template-columns:1fr;gap:14px}
@@ -225,12 +275,12 @@ body[data-theme="light"] button{background:linear-gradient(180deg,#f7f9fc,#e9eef
 
   /* Make actions comfortable on touch screens */
   .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .actions button{width:100%}
+  .actions button{width:100%; min-height: 44px; font-size: 16px;}
   /* Let the last button stretch full width if odd count */
   .actions button:last-child:nth-child(odd){grid-column:1 / -1}
 
   /* Avoid iOS input zoom by ensuring 16px font-size */
-  input,select,textarea,button{font-size:16px}
+  input,select,textarea,button{font-size:16px; min-height: 44px;}
 
   textarea{min-height:140px}
   #dec-input{min-height:180px}
@@ -246,6 +296,18 @@ body[data-theme="light"] button{background:linear-gradient(180deg,#f7f9fc,#e9eef
   
   .qr-video {
     max-width: 280px;
+  }
+  
+  /* Better spacing for mobile */
+  .meta {
+    font-size: 13px;
+    gap: 4px;
+  }
+  
+  /* Mobile-friendly kool code input */
+  #dec-link {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 14px;
   }
 }
 
